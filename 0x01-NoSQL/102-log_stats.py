@@ -1,54 +1,32 @@
 #!/usr/bin/env python3
-'''Task 102 module.
-'''
+"""
+A script that provides some stats about Nginx logs stored in MongoDB
+"""
 from pymongo import MongoClient
 
 
-def print_nginx_request_logs(nginx_collection):
-    '''Prints stats about Nginx request logs.
-    '''
-    print('{} logs'.format(nginx_collection.count_documents({})))
-    print('Methods:')
-    methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-    for method in methods:
-        req_count = len(list(nginx_collection.find({'method': method})))
-        print('\tmethod {}: {}'.format(method, req_count))
-    status_checks_count = len(list(
-        nginx_collection.find({'method': 'GET', 'path': '/status'})
-    ))
-    print('{} status check'.format(status_checks_count))
-
-
-def print_top_ips(server_collection):
-    '''Prints statistics about the top 10 HTTP IPs in a collection.
-    '''
-    print('IPs:')
-    request_logs = server_collection.aggregate(
-        [
-            {
-                '$group': {'_id': "$ip", 'totalRequests': {'$sum': 1}}
-            },
-            {
-                '$sort': {'totalRequests': -1}
-            },
-            {
-                '$limit': 10
-            },
-        ]
-    )
-    for request_log in request_logs:
-        ip = request_log['_id']
-        ip_requests_count = request_log['totalRequests']
-        print('\t{}: {}'.format(ip, ip_requests_count))
-
-
-def run():
-    '''Provides some stats about Nginx logs stored in MongoDB.
-    '''
+def log_stat() -> None:
+    """
+    Provides some stats about Nginx logs stored in MongoDB
+    """
+    stats = ""
     client = MongoClient('mongodb://127.0.0.1:27017')
-    print_nginx_request_logs(client.logs.nginx)
-    print_top_ips(client.logs.nginx)
+    nginx_collection = client.logs.nginx
+    method = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    stats += "{} logs\nMethods:\n".format(nginx_collection.count_documents({}))
+    for m in method:
+        method_count = nginx_collection.count_documents({"method": m})
+        stats += '\tmethod {}: {}\n'.format(m, method_count)
+    stats += "{} status check".format(
+        nginx_collection.count_documents({"path": "/status"}))
+    stats += '\nIPs:\n'
+    top_ips = nginx_collection.aggregate([
+        {'$group': {'_id': '$ip', 'count': {'$sum': 1}}},
+        {'$sort': {'count': -1}}, {'$limit': 10}])
+    for ip in top_ips:
+        stats += '\t{}: {}\n'.format(ip.get('_id'), ip.get('count'))
+    print(stats, end='')
 
 
 if __name__ == '__main__':
-    run()
+    log_stat()
